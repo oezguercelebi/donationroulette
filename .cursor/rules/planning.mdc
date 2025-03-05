@@ -1,0 +1,89 @@
+---
+description: Project Planning
+globs: 
+alwaysApply: true
+---
+# Project Planning
+
+## Project Overview
+
+This document outlines the core planning considerations for our TypeScript project, establishing the foundation for development, maintenance, and collaboration.
+
+## Technology Stack
+
+Our project will use the following technology stack:
+
+- **TypeScript**: For type-safe development
+- **Next.js**: For server-side rendering and routing
+- **React**: For UI component development
+- **Radix UI**: For accessible component primitives
+- **Tailwind CSS**: For utility-first styling
+
+## Key Principles
+
+### Code Structure & Style
+
+- Write concise, technical TypeScript code with accurate implementations
+- Use functional and declarative programming patterns; avoid classes
+- Prefer iteration and modularization over code duplication
+- Use descriptive variable names with auxiliary verbs (e.g., `isLoading`, `hasError`)
+- Structure files: exported component, subcomponents, helpers, static content, types
+
+### Naming Conventions
+
+- Use lowercase with dashes for directories (e.g., `components/auth-wizard`)
+- Favor named exports for components and utilities
+- Follow BEM or similar methodology for custom Tailwind classes
+
+### TypeScript Usage
+
+- Use TypeScript for all code; prefer interfaces over types for public APIs
+- Avoid enums; use const objects or union types instead
+- Use functional components with proper TypeScript interfaces
+- Explicitly define return types for functions with complex logic
+
+## Architecture Design
+
+### Component Structure
+
+```
+src/
+├── components/
+│   ├── ui/            # Base UI components from radix
+│   ├── forms/         # Form-related components
+│   ├── layout/        # Layout components
+│   └── features/      # Feature-specific components
+├── lib/
+│   ├── utils.ts       # Utility functions
+│   ├── types.ts       # Shared TypeScript types
+│   └── constants.ts   # Application constants
+├── app/               # Next.js App Router structure
+└── public/            # Static assets
+```
+
+### Data Flow
+
+- Use React Server Components where possible
+- Implement server actions for data mutations
+- Use client components only when interactivity is required
+- Consider state management needs based on complexity:
+  - React Context for simple state
+  - Tanstack Query for server state
+  - Zustand for complex client state
+- Use URL state (with libraries like `nuqs`) for shareable UI state
+
+## Performance Considerations
+
+- Implement code splitting and lazy loading
+- Optimize for Core Web Vitals
+- Use image optimization techniques
+- Minimize client-side JavaScript
+- Implement proper caching strategies
+
+## Security Plan
+
+- Implement Content Security Policy
+- Sanitize user inputs
+- Use proper authentication and authorization
+- Follow OWASP security best practices
+- Regular security audits and updates

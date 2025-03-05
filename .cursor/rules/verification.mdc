@@ -1,0 +1,215 @@
+---
+description: Verification
+globs: 
+alwaysApply: false
+---
+# Verification
+
+This document outlines best practices for verifying, validating, and maintaining your TypeScript project to ensure high quality and performance over time.
+
+## Code Quality Verification
+
+### Pre-Commit Hooks
+
+Set up pre-commit hooks with Husky and lint-staged to automatically run linting, formatting, and tests before each commit.
+
+```json
+// package.json
+{
+  "scripts": {
+    "prepare": "husky install"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,md}": [
+      "prettier --write"
+    ]
+  }
+}
+```
+
+```shell
+// .husky/pre-commit
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+npx lint-staged
+```
+
+```shell
+// .husky/pre-push
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+npm run type-check
+npm run test
+```
+
+### Performance Auditing
+
+Use Lighthouse CI to automatically audit build performance and web vitals:
+
+```yaml
+# .github/workflows/lighthouse.yml
+name: Lighthouse CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Run Lighthouse CI
+        run: |
+          npm install -g @lhci/cli@0.11.x
+          npm run build
+          lhci autorun
+
+      - name: Upload Lighthouse report
+        uses: actions/upload-artifact@v3
+        with:
+          name: lighthouse-report
+          path: .lighthouseci
+```
+
+```js
+// lighthouserc.js
+module.exports = {
+  ci: {
+    collect: {
+      startServerCommand: 'npm run start',
+      url: ['http://localhost:3000/', 'http://localhost:3000/login'],
+      numberOfRuns: 3,
+    },
+    upload: {
+      target: 'temporary-public-storage',
+    },
+    assert: {
+      preset: 'lighthouse:no-pwa',
+      assertions: {
+        'categories:performance': ['error', { minScore: 0.8 }],
+        'categories:accessibility': ['error', { minScore: 0.9 }],
+        'categories:best-practices': ['error', { minScore: 0.9 }],
+        'categories:seo': ['error', { minScore: 0.9 }],
+        'first-contentful-paint': ['error', { maxNumericValue: 2000 }],
+        'largest-contentful-paint': ['error', { maxNumericValue: 2500 }],
+        'cumulative-layout-shift': ['error', { maxNumericValue: 0.1 }],
+        'total-blocking-time': ['error', { maxNumericValue: 300 }],
+      },
+    },
+  },
+};
+```
+
+## Deployment Verification
+
+### Staging Environment
+
+Set up a staging environment where all changes are tested before being deployed to production:
+
+```yaml
+# .github/workflows/deploy-staging.yml
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v20
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          scope: ${{ secrets.VERCEL_SCOPE }}
+```
+
+### Environment Checklist
+
+Before deploying to production, verify:
+
+1. **Functionality**: All features work as expected
+2. **Performance**: Core Web Vitals are within acceptable ranges
+3. **Accessibility**: Application passes WCAG 2.1 AA standards
+4. **Security**: No vulnerabilities in dependencies
+5. **Browser Compatibility**: Works on all target browsers
+6. **Mobile Responsiveness**: Works on all target devices
+7. **Error Handling**: Proper error handling and fallbacks
+8. **Analytics**: Tracking is properly implemented
+9. **SEO**: Meta tags, semantic HTML, and structured data
+
+## Continuous Monitoring
+
+### Error Tracking
+
+Implement error tracking with Sentry:
+
+```typescript
+// src/lib/sentry.ts
+import * as Sentry from '@sentry/nextjs';
+
+export function initSentry() {
+  Sentry.init({
+    dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+    environment: process.env.NODE_ENV,
+    tracesSampleRate: 1.0, // Lower in production
+    integrations: [
+      new Sentry.BrowserTracing({
+        // Set sampling based on route
+        tracingOrigins: ['localhost', /^\//],
+      }),
+    ],
+  });
+}
+
+export function captureException(error: unknown, context?: Record<string, any>) {
+  Sentry.captureException(error, {
+    extra: context,
+  });
+}
+```
+
+### Analytics Integration
+
+Implement custom event tracking with Google Analytics (or your preferred analytics platform):
+
+```typescript
+// src/lib/analytics.ts
+export function sendAnalyticsEvent(
+  eventName: string,
+  eventParams?: Record<string, any>
+) {
+  if (typeof window !== 'undefined' && 'gtag' in window) {
+    // Google Analytics
+    window.gtag('event', eventName, eventParams);
+  }
+}
+
+export function setUserProperties(properties: Record<string, any>) {
+  if (typeof window !== 'undefined' && 'gtag'

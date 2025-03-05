@@ -1,0 +1,574 @@
+---
+description: Tool Development
+globs: 
+alwaysApply: true
+---
+# Tool Development
+
+This document outlines the essential utilities, hooks, and configurations that serve as the foundational tools for our TypeScript project.
+
+## Core Utilities
+
+### Type-Safe Class Name Utility
+
+```typescript
+// src/lib/utils/cn.ts
+import { type ClassValue, clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+/**
+ * Combines multiple class names and merges Tailwind classes properly
+ * @param inputs - Class names to combine
+ * @returns Merged class string
+ */
+export function cn(...inputs: ClassValue[]): string {
+  return twMerge(clsx(inputs));
+}
+```
+
+### API Request Helper
+
+```typescript
+// src/lib/utils/api.ts
+import { z } from 'zod';
+
+type FetchOptions = RequestInit & {
+  params?: Record<string, string | number | boolean | undefined>;
+};
+
+/**
+ * Enhanced fetch function with automatic JSON parsing and error handling
+ * @param url - API endpoint URL
+ * @param options - Fetch options including params
+ * @returns Promise with the parsed response
+ */
+export async function fetchJson<T>(url: string, options?: FetchOptions): Promise<T> {
+  const { params, ...fetchOptions } = options || {};
+  
+  // Build URL with query parameters
+  const urlObj = new URL(url, window.location.origin);
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        urlObj.searchParams.append(key, String(value));
+      }
+    });
+  }
+  
+  const response = await fetch(urlObj.toString(), {
+    ...fetchOptions,
+    headers: {
+      'Content-Type': 'application/json',
+      ...fetchOptions?.headers,
+    },
+  });
+
+  // Handle non-2xx responses
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || response.statusText || 'API request failed');
+  }
+
+  // Return parsed JSON or empty object if no content
+  return response.status === 204 ? {} as T : response.json();
+}
+
+/**
+ * Creates a type-safe API request with schema validation
+ * @param schema - Zod schema for response validation
+ * @returns Function that makes validated API requests
+ */
+export function createApiRequest<T>(schema: z.ZodType<T>) {
+  return async (url: string, options?: FetchOptions): Promise<T> => {
+    const data = await fetchJson<unknown>(url, options);
+    return schema.parse(data);
+  };
+}
+```
+
+### Form Utilities
+
+```typescript
+// src/lib/utils/form.ts
+import { useForm, UseFormProps, FieldValues, SubmitHandler } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+
+/**
+ * Creates a type-safe form hook with Zod validation
+ * @param schema - Zod schema for form validation
+ * @param options - React Hook Form options
+ * @returns Enhanced useForm with Zod validation
+ */
+export function useZodForm<T extends FieldValues>(
+  schema: z.ZodType<T>,
+  options?: Omit<UseFormProps<T>, 'resolver'>
+) {
+  return useForm<T>({
+    ...options,
+    resolver: zodResolver(schema),
+  });
+}
+
+/**
+ * Creates a submit handler that catches and logs errors
+ * @param onSubmit - Form submission handler
+ * @returns Wrapped submit handler with error handling
+ */
+export function createSafeSubmitHandler<T extends FieldValues>(
+  onSubmit: SubmitHandler<T>
+): SubmitHandler<T> {
+  return async (data, event) => {
+    try {
+      await onSubmit(data, event);
+    } catch (error) {
+      console.error('Form submission error:', error);
+      throw error; // Re-throw to allow the form to handle it
+    }
+  };
+}
+```
+
+## Custom React Hooks
+
+### useLocalStorage
+
+```typescript
+// src/lib/hooks/useLocalStorage.ts
+import { useState, useEffect } from 'react';
+
+/**
+ * Hook for persisting state in localStorage
+ * @param key - localStorage key
+ * @param initialValue - Default value if key doesn't exist
+ * @returns State and setter tuple
+ */
+export function useLocalStorage<T>(
+  key: string,
+  initialValue: T
+): [T, (value: T | ((val: T) => T)) => void] {
+  // Initialize state with existing value or initial value
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    if (typeof window === 'undefined') {
+      return initialValue;
+    }
+    
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.warn(`Error reading localStorage key "${key}":`, error);
+      return initialValue;
+    }
+  });
+
+  // Update localStorage when state changes
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
+    try {
+      window.localStorage.setItem(key, JSON.stringify(storedValue));
+    } catch (error) {
+      console.warn(`Error setting localStorage key "${key}":`, error);
+    }
+  }, [key, storedValue]);
+
+  return [storedValue, setStoredValue];
+}
+```
+
+### useMediaQuery
+
+```typescript
+// src/lib/hooks/useMediaQuery.ts
+import { useState, useEffect } from 'react';
+
+/**
+ * Hook to detect if a media query matches
+ * @param query - CSS media query string
+ * @returns Boolean indicating if the query matches
+ */
+export function useMediaQuery(query: string): boolean {
+  // Default to false on server
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    // Check for window to handle SSR
+    if (typeof window !== 'undefined') {
+      const mediaQuery = window.matchMedia(query);
+      
+      // Set initial value
+      setMatches(mediaQuery.matches);
+      
+      // Update matches when media query changes
+      const handler = (event: MediaQueryListEvent) => {
+        setMatches(event.matches);
+      };
+      
+      // Modern browsers
+      mediaQuery.addEventListener('change', handler);
+      
+      // Cleanup
+      return () => {
+        mediaQuery.removeEventListener('change', handler);
+      };
+    }
+  }, [query]);
+
+  return matches;
+}
+```
+
+### useFetch
+
+```typescript
+// src/lib/hooks/useFetch.ts
+import { useEffect, useState, useCallback } from 'react';
+import { fetchJson } from '@/lib/utils/api';
+
+interface UseFetchOptions<T> extends Omit<RequestInit, 'body'> {
+  params?: Record<string, string | number | boolean | undefined>;
+  body?: unknown;
+  immediate?: boolean;
+}
+
+interface UseFetchResult<T> {
+  data: T | null;
+  isLoading: boolean;
+  error: Error | null;
+  refetch: () => Promise<void>;
+}
+
+/**
+ * Hook for making fetch requests with loading and error states
+ * @param url - API endpoint URL
+ * @param options - Fetch options and configuration
+ * @returns Object with data, loading state, error, and refetch function
+ */
+export function useFetch<T>(
+  url: string,
+  options?: UseFetchOptions<T>
+): UseFetchResult<T> {
+  const [data, setData] = useState<T | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  // Extract options
+  const { immediate = true, body, ...fetchOptions } = options || {};
+
+  // Create refetch function
+  const refetch = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const jsonBody = body ? JSON.stringify(body) : undefined;
+      
+      const result = await fetchJson<T>(url, {
+        ...fetchOptions,
+        ...(body && { 
+          method: 'POST', 
+          body: jsonBody 
+        }),
+      });
+      
+      setData(result);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [url, body, JSON.stringify(fetchOptions)]);
+
+  // Fetch data on mount if immediate is true
+  useEffect(() => {
+    if (immediate) {
+      refetch();
+    }
+  }, [refetch, immediate]);
+
+  return { data, isLoading, error, refetch };
+}
+```
+
+## Server Actions
+
+### Authentication Actions
+
+```typescript
+// src/app/actions/auth.ts
+'use server'
+
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { z } from 'zod';
+import { createSafeActionClient } from 'next-safe-action';
+import type { ActionResponse } from '@/lib/types/actions';
+
+// Validation schemas
+const loginSchema = z.object({
+  email: z.string().email('Please enter a valid email'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  remember: z.boolean().optional(),
+});
+
+// Login action
+export const login = createSafeActionClient()
+  .schema(loginSchema)
+  .action(async (input): Promise<ActionResponse> => {
+    try {
+      // For demo purposes, mock a successful login
+      // In a real app, this would validate credentials with a database/API
+      
+      // Set session cookie
+      cookies().set('session', 'user-session-token', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: input.remember ? 60 * 60 * 24 * 30 : 60 * 60 * 24, // 30 days or 1 day
+        path: '/',
+      });
+      
+      return { 
+        success: true, 
+        data: { 
+          redirectUrl: '/dashboard' 
+        } 
+      };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: 'Invalid email or password. Please try again.' 
+      };
+    }
+  });
+
+// Logout action
+export async function logout() {
+  cookies().delete('session');
+  redirect('/login');
+}
+```
+
+## Configuration Files
+
+### Next.js Config
+
+```typescript
+// next.config.js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  swcMinify: true,
+  images: {
+    domains: ['images.example.com'],
+    formats: ['image/avif', 'image/webp'],
+  },
+  experimental: {
+    serverActions: true,
+  },
+  env: {
+    API_URL: process.env.API_URL,
+  },
+  async redirects() {
+    return [
+      {
+        source: '/home',
+        destination: '/',
+        permanent: true,
+      },
+    ];
+  },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
+          },
+        ],
+      },
+    ];
+  },
+};
+
+module.exports = nextConfig;
+```
+
+### Tailwind Configuration
+
+```javascript
+// tailwind.config.js
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  darkMode: ['class'],
+  content: [
+    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  theme: {
+    container: {
+      center: true,
+      padding: '2rem',
+      screens: {
+        '2xl': '1400px',
+      },
+    },
+    extend: {
+      colors: {
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        primary: {
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(var(--primary-foreground))',
+        },
+        secondary: {
+          DEFAULT: 'hsl(var(--secondary))',
+          foreground: 'hsl(var(--secondary-foreground))',
+        },
+        destructive: {
+          DEFAULT: 'hsl(var(--destructive))',
+          foreground: 'hsl(var(--destructive-foreground))',
+        },
+        muted: {
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'hsl(var(--muted-foreground))',
+        },
+        accent: {
+          DEFAULT: 'hsl(var(--accent))',
+          foreground: 'hsl(var(--accent-foreground))',
+        },
+        popover: {
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))',
+        },
+        card: {
+          DEFAULT: 'hsl(var(--card))',
+          foreground: 'hsl(var(--card-foreground))',
+        },
+      },
+      borderRadius: {
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)',
+      },
+      keyframes: {
+        'accordion-down': {
+          from: { height: 0 },
+          to: { height: 'var(--radix-accordion-content-height)' },
+        },
+        'accordion-up': {
+          from: { height: 'var(--radix-accordion-content-height)' },
+          to: { height: 0 },
+        },
+      },
+      animation: {
+        'accordion-down': 'accordion-down 0.2s ease-out',
+        'accordion-up': 'accordion-up 0.2s ease-out',
+      },
+    },
+  },
+  plugins: [require('tailwindcss-animate')],
+};
+```
+
+### ESLint Configuration
+
+```javascript
+// .eslintrc.js
+module.exports = {
+  extends: [
+    'next/core-web-vitals',
+    'eslint:recommended',
+    'plugin:@typescript-eslint/recommended',
+    'plugin:import/recommended',
+    'plugin:import/typescript',
+    'plugin:react/recommended',
+    'plugin:react-hooks/recommended',
+    'plugin:jsx-a11y/recommended',
+  ],
+  parser: '@typescript-eslint/parser',
+  plugins: ['@typescript-eslint', 'import', 'react', 'react-hooks', 'jsx-a11y'],
+  rules: {
+    'react/react-in-jsx-scope': 'off',
+    'react/prop-types': 'off',
+    'import/order': [
+      'error',
+      {
+        groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index'],
+        'newlines-between': 'always',
+        alphabetize: { order: 'asc', caseInsensitive: true },
+      },
+    ],
+    '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+    '@typescript-eslint/explicit-function-return-type': 'off',
+    '@typescript-eslint/explicit-module-boundary-types': 'off',
+    'jsx-a11y/anchor-is-valid': 'warn',
+  },
+  settings: {
+    'import/resolver': {
+      typescript: {},
+      node: {
+        extensions: ['.js', '.jsx', '.ts', '.tsx'],
+      },
+    },
+    react: {
+      version: 'detect',
+    },
+  },
+};
+```
+
+### Type Definitions
+
+```typescript
+// src/lib/types/actions.ts
+export interface ActionResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+// src/lib/types/api.ts
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: {
+    total: number;
+    currentPage: number;
+    lastPage: number;
+    perPage: number;
+  };
+}
+
+export interface ApiError {
+  message: string;
+  code?: string;
+  errors?: Record<string, string[]>;
+}
+
+// src/lib/types/user.ts
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  role: 'user' | 'admin';
+  createdAt: string;
+  updatedAt: string;
+}
+```

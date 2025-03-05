@@ -1,0 +1,264 @@
+---
+description: Folder Structure and Template Creation
+globs: 
+alwaysApply: true
+---
+
+# Folder Structure and Template Creation
+
+## Project Structure
+
+This document outlines the standardized folder structure for our TypeScript project and provides guidance on setting up templates for consistency.
+
+## Root Directory Structure
+
+```
+project-name/
+├── .vscode/                # VS Code configuration
+├── .github/                # GitHub workflows and templates
+├── .cursor/                # Cursor AI configuration
+│   └── rules/              # Project-specific rules
+├── public/                 # Static files
+├── src/                    # Source code
+├── .env.example            # Example environment variables
+├── .eslintrc.js            # ESLint configuration
+├── .prettierrc             # Prettier configuration
+├── next.config.js          # Next.js configuration
+├── package.json            # Dependencies and scripts
+├── postcss.config.js       # PostCSS configuration
+├── tailwind.config.js      # Tailwind CSS configuration
+├── tsconfig.json           # TypeScript configuration
+└── README.md               # Project documentation
+```
+
+## Source Directory Structure
+
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── (auth)/             # Auth-related routes (grouped)
+│   │   ├── login/          # Login page
+│   │   └── register/       # Register page
+│   ├── (dashboard)/        # Dashboard routes (grouped)
+│   ├── api/                # API routes
+│   └── layout.tsx          # Root layout
+├── components/             # React components
+│   ├── ui/                 # UI components from shadcn
+│   ├── forms/              # Form components
+│   ├── layout/             # Layout components
+│   └── features/           # Feature-specific components
+├── lib/                    # Shared utilities
+│   ├── utils/              # Utility functions
+│   ├── hooks/              # Custom React hooks
+│   ├── types/              # TypeScript type definitions
+│   ├── constants/          # Application constants
+│   └── schemas/            # Zod schemas for validation
+├── styles/                 # Global styles
+└── middleware.ts           # Next.js middleware
+```
+
+## Template Files
+
+### Component Template
+
+```typescript
+// src/components/ui/button.tsx
+import React from 'react';
+import { cn } from '@/lib/utils';
+
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'default' | 'primary' | 'secondary' | 'ghost';
+  size?: 'sm' | 'md' | 'lg';
+  isLoading?: boolean;
+}
+
+export function Button({
+  children,
+  className,
+  variant = 'default',
+  size = 'md',
+  isLoading = false,
+  disabled,
+  ...props
+}: ButtonProps) {
+  return (
+    <button
+      className={cn(
+        'inline-flex items-center justify-center rounded-md font-medium transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
+        {
+          'bg-primary text-white hover:bg-primary/90': variant === 'primary',
+          'bg-secondary text-secondary-foreground hover:bg-secondary/80': variant === 'secondary',
+          'hover:bg-accent hover:text-accent-foreground': variant === 'ghost',
+          'px-2 py-1 text-sm': size === 'sm',
+          'px-4 py-2': size === 'md',
+          'px-6 py-3 text-lg': size === 'lg',
+          'opacity-50 cursor-not-allowed': isLoading || disabled,
+        },
+        className
+      )}
+      disabled={isLoading || disabled}
+      {...props}
+    >
+      {isLoading ? (
+        <span className="mr-2">
+          {/* Loading spinner */}
+          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+              fill="none"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+        </span>
+      ) : null}
+      {children}
+    </button>
+  );
+}
+```
+
+### Page Template (Next.js App Router)
+
+```typescript
+// src/app/(dashboard)/dashboard/page.tsx
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Dashboard | Project Name',
+  description: 'View your dashboard and manage your account',
+};
+
+export default function DashboardPage() {
+  return (
+    <main className="container mx-auto py-6">
+      <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
+      <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* Dashboard content */}
+      </section>
+    </main>
+  );
+}
+```
+
+### Server Action Template
+
+```typescript
+// src/app/actions/user.ts
+'use server'
+
+import { z } from 'zod';
+import { createSafeActionClient } from 'next-safe-action';
+import type { ActionResponse } from '@/lib/types/actions';
+
+const userSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Invalid email address'),
+});
+
+export const updateUser = createSafeActionClient()
+  .schema(userSchema)
+  .action(async (input): Promise<ActionResponse> => {
+    try {
+      // Action implementation
+      return { 
+        success: true, 
+        data: { user: { id: '123', ...input } } 
+      };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: String(error) || 'An unexpected error occurred' 
+      };
+    }
+  });
+```
+
+## Project Setup Commands
+
+```bash
+# Initialize project
+npx create-next-app@latest my-project --typescript --eslint --tailwind --app
+
+# Install core dependencies
+cd my-project
+npm install zod next-safe-action @tanstack/react-query nuqs
+
+# Install UI components
+npx shadcn-ui@latest init
+npx shadcn-ui@latest add button card dialog form input
+
+# Setup folders
+mkdir -p src/components/{ui,forms,layout,features}
+mkdir -p src/lib/{utils,hooks,types,constants,schemas}
+```
+
+## Git Configuration
+
+Create `.gitignore` with:
+
+```
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env*.local
+.env
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+```
+
+## VS Code Configuration
+
+Create `.vscode/settings.json` with:
+
+```json
+{
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "tailwindCSS.experimental.classRegex": [
+    ["cva\\(([^)]*)\\)", "[\"'`](mdc:[^\"'`]*).*?[\"'`]"],
+    ["cn\\(([^)]*)\\)", "[\"'`](mdc:[^\"'`]*).*?[\"'`]"]
+  ]
+}
+```

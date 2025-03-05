@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Add Supercell font */
+@font-face {
+  font-family: 'Supercell';
+  src: url('/fonts/supercell.woff2') format('woff2'),
+       url('/fonts/supercell.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 10, 66, 113;
+  --background-end-rgb: 21, 101, 192;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      135deg,
+      rgb(var(--background-start-rgb)),
+      rgb(var(--background-end-rgb))
+    );
+  min-height: 100vh;
+}
+
+@layer components {
+  .spinner-container {
+    @apply relative w-64 h-64 sm:w-80 sm:h-80 md:w-[450px] md:h-[450px] mx-auto my-8;
+  }
+
+  .spinner-wheel {
+    @apply w-full h-full rounded-full shadow-xl border-8 border-primary-dark transition-all duration-[4000ms] ease-in-out;
+    background: conic-gradient(
+      from 0deg,
+      theme('colors.primary.DEFAULT') 0deg 45deg,
+      theme('colors.secondary.DEFAULT') 45deg 90deg,
+      theme('colors.accent.DEFAULT') 90deg 135deg,
+      theme('colors.green.DEFAULT') 135deg 180deg,
+      theme('colors.purple.DEFAULT') 180deg 225deg,
+      theme('colors.primary.DEFAULT') 225deg 270deg,
+      theme('colors.secondary.DEFAULT') 270deg 315deg,
+      theme('colors.accent.DEFAULT') 315deg 360deg
+    );
+  }
+
+  .spinner-arrow {
+    @apply absolute top-0 left-1/2 -translate-x-1/2 -mt-2 w-8 h-12;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  }
+
+  .spinner-center {
+    @apply absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-white shadow-lg flex items-center justify-center;
+  }
+
+  .spinner-segment {
+    @apply absolute top-0 left-0 w-full h-full;
+    transform-origin: center;
+  }
+
+  .spinner-value {
+    @apply absolute top-0 left-0 w-full h-full flex items-center justify-center text-2xl font-bold;
+    transform-origin: center;
+    left: 50%;
+    transform: translateX(-50%) rotate(0deg);
+  }
+
+  /* iOS Style Picker */
+  .charity-picker-container {
+    @apply relative mx-auto mt-10 mb-16 bg-background-paper rounded-xl shadow-xl overflow-hidden max-w-md;
+    height: 180px;
+  }
+
+  .charity-picker-highlight {
+    @apply absolute left-0 right-0 top-1/2 -translate-y-1/2 h-14 border-t-2 border-b-2 border-primary-dark pointer-events-none z-10;
+    background: rgba(255, 182, 38, 0.1);
+  }
+
+  .charity-picker-list {
+    @apply flex flex-col h-full overflow-hidden w-full text-center transition-transform duration-[400ms];
+    transform-style: preserve-3d;
+  }
+
+  .charity-picker-item {
+    @apply py-4 text-2xl font-bold text-background-dark flex items-center justify-center h-14 transition-all;
+  }
+
+  .charity-picker-selected {
+    @apply text-primary-dark scale-110;
+  }
+
+  .charity-picker-overlay {
+    @apply absolute inset-0 bg-gradient-to-b from-white via-transparent to-white pointer-events-none z-20;
+    opacity: 0.7;
+  }
+
+  .btn-spin {
+    @apply bg-primary hover:bg-primary-dark text-white font-bold py-3 px-8 rounded-full text-xl shadow-lg transform transition-transform active:scale-95 mt-6;
+  }
+
+  .modal-overlay {
+    @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4;
+  }
+
+  .modal-container {
+    @apply bg-background-paper rounded-2xl p-6 max-w-md w-full shadow-2xl;
+  }
+
+  .modal-header {
+    @apply text-2xl font-bold text-center mb-6 text-background-dark;
+  }
+
+  .wallet-button {
+    @apply flex items-center justify-between w-full p-4 mb-3 bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow;
+  }
+}
+
+@keyframes bounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-bounce-in {
+  animation: bounceIn 0.6s;
+}
+
+/* Tailwind custom colors */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --primary: 37 100% 50%;
+    --primary-dark: 37 100% 40%;
+    --secondary: 217 91% 60%;
+    --accent: 346 84% 61%;
+    --green: 142 76% 36%;
+    --purple: 262 83% 58%;
+    --background-paper: 0 0% 100%;
+    --background-dark: 215 28% 17%;
+  }
+} 
